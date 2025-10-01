@@ -3,7 +3,7 @@
   "contentVersion": "1.0.0.0",
   "parameters": {
     "rgName": {
-      "value": "rg-networking-dev-weu-02"
+      "value": "rg-networking-dev-weu-new"
     },
     "location": {
       "value": "westeurope"
@@ -15,7 +15,7 @@
       }
     },
     "vnetName": {
-      "value": "vnet-dev-weu-02"
+      "value": "vnet-dev-weu-new"
     },
     "vnetAddressPrefix": {
       "value": "10.10.0.0/16"
@@ -35,3 +35,4 @@
   }
 
 }
+
