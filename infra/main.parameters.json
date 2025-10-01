@@ -3,7 +3,7 @@
   "contentVersion": "1.0.0.0",
   "parameters": {
     "rgName": {
-      "value": "rg-networking-dev-weu-01"
+      "value": "rg-networking-dev-weu-02"
     },
     "location": {
       "value": "westeurope"
@@ -33,4 +33,5 @@
       "value": "10.10.2.0/24"
     }
   }
+
 }
