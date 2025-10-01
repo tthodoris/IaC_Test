@@ -25,7 +25,7 @@ parameters:
   - name: paramFile
     displayName: Path to parameters file
     type: string
-    default: infra/main.parameters.bicep   # <<— your file
+    default: infra/main.parameters.json   # <<— your file
 
 variables:
   deploymentLocation: 'westeurope'   # subscription-scope deployment location (metadata only)
@@ -123,3 +123,4 @@ stages:
             az group delete --name "$RG_NAME" --yes --no-wait
             echo "Delete requested."
           fi
+
