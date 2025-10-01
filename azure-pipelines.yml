@@ -94,17 +94,7 @@ stages:
               --location "$(deploymentLocation)" \
               --template-file "infra/main.bicep" \
               --parameters "@$(PARAM_FILE)"
-          else
-            # When action=delete, remove the resource group defined in your parameters file.
-            # We need the rgName from params to delete the correct RG. We can extract it via what-if/outputs or just pass it as a runtime variable.
-            # If your param file sets 'rgName', we can parse it quickly:
-            echo "Attempting to resolve rgName from parameter file..."
-            RG_NAME=$(grep -E "param[[:space:]]+rgName[[:space:]]*=" -m1 "${{ parameters.paramFile }}" | sed -E "s/.*=['\"]([^'\solve rgName from parameters file. Please set a variable or delete manually."
-              exit 1
-            fi
-            echo "Deleting Resource Group: $RG_NAME"
-            az group delete --name "$RG_NAME" --yes --no-wait
-            echo "Delete requested."
           fi
+
 
 
