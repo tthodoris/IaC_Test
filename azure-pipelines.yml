@@ -1,0 +1,125 @@
+# azure-pipelines.yml
+trigger:
+  branches:
+    include:
+      - main
+  paths:
+    include:
+      - infra/*
+      - azure-pipelines.yml
+
+parameters:
+  - name: action
+    displayName: Action
+    type: string
+    default: deploy
+    values: [ deploy, delete ]
+
+  - name: env
+    displayName: Environment
+    type: string
+    default: dev
+    values: [ dev, test, prod ]
+
+  # Path to your parameter file; can be overridden at queue time if needed
+  - name: paramFile
+    displayName: Path to parameters file
+    type: string
+    default: infra/main.parameters.bicep   # <<— your file
+
+variables:
+  deploymentLocation: 'westeurope'   # subscription-scope deployment location (metadata only)
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+stages:
+- stage: Deploy_${{ parameters.env }}
+  displayName: Deploy (${{ parameters.env }})
+  jobs:
+  - job: Deploy
+    displayName: RG + VNet (Bicep with parameters file)
+    steps:
+    - checkout: self
+
+    # Prepare parameters: compile .bicep/.bicepparam -> JSON if possible for max compatibility
+    - task: AzureCLI@2
+      displayName: 'Prepare parameters (compile if needed)'
+      inputs:
+        azureSubscription: 'sc-azure-subscription'   # <-- change to your service connection name
+        scriptType: bash
+        scriptLocation: inlineScript
+        inlineScript: |
+          set -euo pipefail
+          SRC_FILE="${{ parameters.paramFile }}"
+          echo "Source parameters file: $SRC_FILE"
+
+          # Paths
+          WORKSPACE_DIR="$(Pipeline.Workspace)"
+          mkdir -p "$WORKSPACE_DIR/params"
+          PARAM_TMP="$WORKSPACE_DIR/params/parameters.bicepparam"
+          PARAM_JSON="$WORKSPACE_DIR/params/parameters.json"
+
+          # If the file is not .bicepparam, copy it to a .bicepparam temp file (content is what matters)
+          cp "$SRC_FILE" "$PARAM_TMP"
+
+          # Try to compile using az bicep build-params (best compatibility)
+          if az bicep --help >/dev/null 2>&1; then
+            echo "az bicep is available; attempting to build parameter file..."
+            if az bicep build-params --file "$PARAM_TMP" --outfile "$PARAM_JSON"; then
+              echo "Compiled parameter file -> $PARAM_JSON"
+              echo "##vso[task.setvariable variable=PARAM_FILE]$PARAM_JSON"
+            else
+              echo "build-params failed. Will try to pass the original file directly."
+              echo "##vso[task.setvariable variable=PARAM_FILE]$SRC_FILE"
+            fi
+          else
+            echo "az bicep not available. Will pass the original file directly."
+            echo "##vso[task.setvariable variable=PARAM_FILE]$SRC_FILE"
+          fi
+
+    # Optional: What-If (non-blocking)
+    - task: AzureCLI@2
+      displayName: 'What-If: subscription-scope'
+      inputs:
+        azureSubscription: 'sc-azure-subscription'
+        scriptType: bash
+        scriptLocation: inlineScript
+        inlineScript: |
+          set -euo pipefail
+          echo "Running WHAT-IF using parameters at: $(PARAM_FILE)"
+          az deployment sub what-if \
+            --name "whatif-rg-vnet-$(Build.BuildId)" \
+            --location "$(deploymentLocation)" \
+            --template-file "infra/main.bicep" \
+            --parameters "@$(PARAM_FILE)"
+      continueOnError: true  # informational
+
+    # Deploy or Delete
+    - task: AzureCLI@2
+      displayName: 'Execute ${{ parameters.action }}'
+      inputs:
+        azureSubscription: 'sc-azure-subscription'
+        scriptType: bash
+        scriptLocation: inlineScript
+        inlineScript: |
+          set -euo pipefail
+          if [ "${{ parameters.action }}" = "deploy" ]; then
+            echo "Deploying with parameters at: $(PARAM_FILE)"
+            az deployment sub create \
+              --name "create-rg-vnet-$(Build.BuildId)" \
+              --location "$(deploymentLocation)" \
+              --template-file "infra/main.bicep" \
+              --parameters "@$(PARAM_FILE)"
+          else
+            # When action=delete, remove the resource group defined in your parameters file.
+            # We need the rgName from params to delete the correct RG. We can extract it via what-if/outputs or just pass it as a runtime variable.
+            # If your param file sets 'rgName', we can parse it quickly:
+            echo "Attempting to resolve rgName from parameter file..."
+            RG_NAME=$(grep -E "param[[:space:]]+rgName[[:space:]]*=" -m1 "${{ parameters.paramFile }}" | sed -E "s/.*=['\"]([^'\solve rgName from parameters file. Please set a variable or delete manually."
+              exit 1
+            fi
+            echo "Deleting Resource Group: $RG_NAME"
+            az group delete --name "$RG_NAME" --yes --no-wait
+            echo "Delete requested."
+          fi
