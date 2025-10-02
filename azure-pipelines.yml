@@ -88,13 +88,9 @@ stages:
         inlineScript: |
           if [ "${{ parameters.action }}" = "deploy" ]; then
             echo "Deploying with parameters att: $(PARAM_FILE)"
-            az deployment sub create \
-              --name "create-rg-vnet-$(Build.BuildId)" \
-              --location "$(deploymentLocation)" \
-              --template-file "infra/main.bicep" \
-              --parameters "@$(PARAM_FILE)" \
-              --verbose
+            az deployment group create  --resource-group "rg-networking-dev-weu-01"   --name vnet-deploy-$(date +%s)   --template-file main.bicep   --parameters @main.parameters.json
           fi
+
 
 
 
