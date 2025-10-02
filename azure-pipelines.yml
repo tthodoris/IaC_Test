@@ -86,7 +86,6 @@ stages:
         scriptType: bash
         scriptLocation: inlineScript
         inlineScript: |
-          set -euo pipefail
           if [ "${{ parameters.action }}" = "deploy" ]; then
             echo "Deploying with parameters att: $(PARAM_FILE)"
             az deployment sub create \
@@ -95,6 +94,7 @@ stages:
               --template-file "infra/main.bicep" \
               --parameters "@$(PARAM_FILE)"
           fi
+
 
 
 
