@@ -55,7 +55,8 @@ stages:
                 set -euo pipefail
 
                 echo "Checking Bicep CLI availability…"
-                az bicep install --upgrade >/dev/null
+                az bicep install
+                az bicep upgrade
 
                 if [ "$(useInlineParameters)" = "true" ]; then
                   echo "Running WHAT-IF with inline parameters…"
@@ -96,7 +97,8 @@ stages:
               inlineScript: |
                 set -euo pipefail
 
-                az bicep install --upgrade >/dev/null
+                az bicep install
+                az bicep upgrade
 
                 DEPLOY_NAME="vnet-deploy-$(date +%s)"
 
@@ -120,4 +122,5 @@ stages:
                 fi
 
                 echo "Deployment completed."
+
 
