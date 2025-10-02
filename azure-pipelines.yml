@@ -93,8 +93,9 @@ stages:
               --name "create-rg-vnet-$(Build.BuildId)" \
               --location "$(deploymentLocation)" \
               --template-file "infra/main.bicep" \
-              --parameters "@$(PARAM_FILE) --debug"
+              --parameters "@$(PARAM_FILE)" --debug
           fi
+
 
 
 
