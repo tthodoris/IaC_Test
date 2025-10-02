@@ -2,37 +2,13 @@
   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
   "contentVersion": "1.0.0.0",
   "parameters": {
-    "rgName": {
-      "value": "rg-networking-dev-weu-new"
-    },
-    "location": {
-      "value": "westeurope"
-    },
-    "tags": {
-      "value": {
-        "env": "dev",
-        "owner": "networking"
-      }
-    },
-    "vnetName": {
-      "value": "vnet-dev-weu-new"
-    },
-    "vnetAddressPrefix": {
-      "value": "10.10.0.0/16"
-    },
-    "subnet1Name": {
-      "value": "snet-app"
-    },
-    "subnet1Prefix": {
-      "value": "10.10.1.0/24"
-    },
-    "subnet2Name": {
-      "value": "snet-data"
-    },
-    "subnet2Prefix": {
-      "value": "10.10.2.0/24"
+    "vnetName": { "value": "vnet-dev-weu-01" },
+    "vnetAddressPrefixes": { "value": ["10.10.0.0/16"] },
+    "subnets": {
+      "value": [
+        { "name": "snet-app", "addressPrefix": "10.10.1.0/24" },
+        { "name": "snet-data", "addressPrefix": "10.10.2.0/24" }
+      ]
     }
   }
-
 }
-
