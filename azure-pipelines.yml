@@ -14,7 +14,7 @@ pr:
 
 variables:
   # >>>>>> EDIT THESE <<<<<<
-  azureServiceConnection: 'sc-azure-connection'   # Azure DevOps service connection name
+  azureServiceConnection: 'tt-sc-azure'   # Azure DevOps service connection name
   resourceGroupName: 'rg-networking-dev-weu-01'      # Existing RG, pipeline won't create it
   location: 'westeurope'                           # Used by what-if if needed
   templateFile: 'infra/main.bicep'                       # Path to your Bicep file in repo
@@ -120,3 +120,4 @@ stages:
                 fi
 
                 echo "Deployment completed."
+
