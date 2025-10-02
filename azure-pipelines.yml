@@ -1,105 +1,122 @@
 # azure-pipelines.yml
+# Validates (what-if) and deploys a resource-group scoped Bicep (VNet + subnets)
+
 trigger:
   branches:
     include:
       - main
-  paths:
+      - master
+
+pr:
+  branches:
     include:
-      - infra/*
-      - azure-pipelines.yml
-
-parameters:
-  - name: action
-    displayName: Action
-    type: string
-    default: deploy
-    values: [ deploy, delete ]
-
-  - name: env
-    displayName: Environment
-    type: string
-    default: dev
-    values: [ dev, test, prod ]
-
-  # Path to your parameter file; can be overridden at queue time if needed
-  - name: paramFile
-    displayName: Path to parameters file
-    type: string
-    default: infra/main.parameters.json   # <<— your file
+      - "*"
 
 variables:
-  deploymentLocation: 'westeurope'   # subscription-scope deployment location (metadata only)
+  # >>>>>> EDIT THESE <<<<<<
+  azureServiceConnection: 'sc-azure-connection'   # Azure DevOps service connection name
+  resourceGroupName: 'rg-networking-dev-weu-01'      # Existing RG, pipeline won't create it
+  location: 'westeurope'                           # Used by what-if if needed
+  templateFile: 'infra/main.bicep'                       # Path to your Bicep file in repo
+  parametersFile: 'infra/main.parameters.json'                # Path to your parameters (optional)
+
+  # If you prefer inline parameters instead of a file, set useInlineParameters: 'true'
+  useInlineParameters: 'false'
+
+  # Inline parameters (used when useInlineParameters == 'true').
+  # Make sure the JSON below is valid and single-line or use YAML folded style.
+  vnetName: 'vnet-dev-weu'
+  vnetAddressPrefixes: '["10.10.0.0/16"]'
+  subnetsJson: >-
+    [
+      { "name": "snet-app",  "addressPrefix": "10.10.1.0/24" },
+      { "name": "snet-data", "addressPrefix": "10.10.2.0/24" }
+    ]
 
 pool:
   vmImage: 'ubuntu-latest'
 
 stages:
-- stage: Deploy_${{ parameters.env }}
-  displayName: Deploy (${{ parameters.env }})
-  jobs:
-  - job: Deploy
-    displayName: RG + VNet (Bicep with parameters file)
-    steps:
-    - checkout: self
+  - stage: Validate
+    displayName: What-if (Validate)
+    jobs:
+      - job: WhatIf
+        displayName: ARM What-if
+        steps:
+          - checkout: self
 
-    # Prepare parameters: compile .bicep/.bicepparam -> JSON if possible for max compatibility
-    - task: AzureCLI@2
-      displayName: 'Prepare parameters (compile if needed)'
-      inputs:
-        azureSubscription: 'sc-azure-subscription'   # <-- change to your service connection name
-        scriptType: bash
-        scriptLocation: inlineScript
-        inlineScript: |
-          set -euo pipefail
-          SRC_FILE="${{ parameters.paramFile }}"
-          echo "Source parameters file: $SRC_FILE"
+          - task: AzureCLI@2
+            displayName: 'Azure CLI: what-if deployment'
+            inputs:
+              azureSubscription: '$(azureServiceConnection)'
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                set -euo pipefail
 
-          # Paths
-          WORKSPACE_DIR="$(Pipeline.Workspace)"
-          mkdir -p "$WORKSPACE_DIR/params"
-          PARAM_TMP="$WORKSPACE_DIR/params/parameters.bicepparam"
-          PARAM_JSON="$WORKSPACE_DIR/params/parameters.json"
+                echo "Checking Bicep CLI availability…"
+                az bicep install --upgrade >/dev/null
 
-          # If the file is not .bicepparam, copy it to a .bicepparam temp file (content is what matters)
-          cp "$SRC_FILE" "$PARAM_TMP"
+                if [ "$(useInlineParameters)" = "true" ]; then
+                  echo "Running WHAT-IF with inline parameters…"
+                  az deployment group what-if \
+                    --resource-group "$(resourceGroupName)" \
+                    --template-file "$(templateFile)" \
+                    --parameters \
+                      vnetName="$(vnetName)" \
+                      vnetAddressPrefixes='$(vnetAddressPrefixes)' \
+                      subnets='$(subnetsJson)'
+                else
+                  echo "Running WHAT-IF with parameters file…"
+                  if [ ! -f "$(parametersFile)" ]; then
+                    echo "ERROR: parameters file '$(parametersFile)' not found."
+                    exit 1
+                  fi
+                  az deployment group what-if \
+                    --resource-group "$(resourceGroupName)" \
+                    --template-file "$(templateFile)" \
+                    --parameters @"$(parametersFile)"
+                fi
 
-          # Try to compile using az bicep build-params (best compatibility)
-          if az bicep --help >/dev/null 2>&1; then
-            echo "az bicep is available; attempting to build parameter file..."
-            if az bicep build-params --file "$PARAM_TMP" --outfile "$PARAM_JSON"; then
-              echo "Compiled parameter file -> $PARAM_JSON"
-              echo "##vso[task.setvariable variable=PARAM_FILE]$PARAM_JSON"
-            else
-              echo "build-params failed. Will try to pass the original file directly."
-              echo "##vso[task.setvariable variable=PARAM_FILE]$SRC_FILE"
-            fi
-          else
-            echo "az bicep not available. Will pass the original file directly."
-            echo "##vso[task.setvariable variable=PARAM_FILE]$SRC_FILE"
-          fi
+  - stage: Deploy
+    displayName: Deploy to Resource Group
+    dependsOn: Validate
+    jobs:
+      - job: DeployRG
+        displayName: Deploy VNet + Subnets
+        steps:
+          - checkout: self
 
-    # Deploy or Delete
-    # azure-pipelines.yml (snippet)
-    - task: AzureCLI@2
-      displayName: Deploy VNet + subnets
-      inputs:
-        azureSubscription: 'sc-azure-connection'
-        scriptType: bash
-        scriptLocation: inlineScript
-        inlineScript: |
-          az deployment group create \
-            --resource-group rg-networking-dev-weu-01 \
-            --template-file main.bicep \
-            --parameters @main.parameters.json
+          - task: AzureCLI@2
+            displayName: 'Azure CLI: deploy'
+            inputs:
+              azureSubscription: '$(azureServiceConnection)'
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                set -euo pipefail
 
+                az bicep install --upgrade >/dev/null
 
+                DEPLOY_NAME="vnet-deploy-$(date +%s)"
 
+                if [ "$(useInlineParameters)" = "true" ]; then
+                  echo "Deploying with inline parameters…"
+                  az deployment group create \
+                    --name "$DEPLOY_NAME" \
+                    --resource-group "$(resourceGroupName)" \
+                    --template-file "$(templateFile)" \
+                    --parameters \
+                      vnetName="$(vnetName)" \
+                      vnetAddressPrefixes='$(vnetAddressPrefixes)' \
+                      subnets='$(subnetsJson)'
+                else
+                  echo "Deploying with parameters file…"
+                  az deployment group create \
+                    --name "$DEPLOY_NAME" \
+                    --resource-group "$(resourceGroupName)" \
+                    --template-file "$(templateFile)" \
+                    --parameters @"$(parametersFile)"
+                fi
 
-
-
-
-
-
-
-
-
+                echo "Deployment completed."
