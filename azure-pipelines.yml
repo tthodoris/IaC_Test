@@ -79,17 +79,20 @@ stages:
           fi
 
     # Deploy or Delete
+    # azure-pipelines.yml (snippet)
     - task: AzureCLI@2
-      displayName: 'Execute ${{ parameters.action }}'
+      displayName: Deploy VNet + subnets
       inputs:
-        azureSubscription: 'sc-azure-subscription'
+        azureSubscription: 'sc-azure-connection'
         scriptType: bash
         scriptLocation: inlineScript
         inlineScript: |
-          if [ "${{ parameters.action }}" = "deploy" ]; then
-            echo "Deploying with parameters att: $(PARAM_FILE)"
-            az deployment group create  --resource-group "rg-networking-dev-weu-01"   --name vnet-deploy-$(date +%s)   --template-file main.bicep   --parameters @main.parameters.json
-          fi
+          az deployment group create \
+            --resource-group rg-networking-dev-weu-01 \
+            --template-file main.bicep \
+            --parameters @main.parameters.json
+
+
 
 
 
